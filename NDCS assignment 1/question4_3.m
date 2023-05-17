@@ -3,13 +3,13 @@
 % (h,tau)=(0.5h_n,0.25h_n) and (h,tau)=(1.5h_n,0.75h_n)
 % is maximized
 
-%[K,fval,exitflag,output,population,scores] = ga(@objective_function,3);
-%population
-%K
-%fval
+% Use genetic algorithm to find controller K giving largest range of h_n
+% which still guarantees closed-loop stability
+[K,fval,exitflag,output,population,scores] = ga(@objective_function,3);
+K
+fval
 
-%[K,fval] = fminsearch(@objective_function,[-1.3531    3.9921    0.9982]);
-
+% Best found fval and K:
 test_stability(0.5344,[-1.3531    3.9921    0.9982])
 
 function out = objective_function(K)
