@@ -3,7 +3,7 @@ clear all;
 A = [1 -1.5 ; 0 1]; B = [0 ; 1]; K = [-16/3 4];
 A_K = A-B*K;
 
-sigma = 0.5;   % performance parameter, see lecture slides
+sigma = 0.01;   % performance parameter, see lecture slides
 h_min = 0.001; % minimal sampling interval
 
 %% Solve algebraic Riccati equation
@@ -18,31 +18,73 @@ P = value(P);
 
 %% SIMULATION FOR VARIOUS INITIAL CONDITIONS
 
-initial_conditions = [1 1 ; 1 4 ; 3 2 ; 2.5 0 ; 0 1.5]';
-steps = 1:12;
+sigma_values = [0.01, 0.2, 0.6, 0.9, 0.99];
+initial_conditions = [0.2 0.15; 1 2 ; 4 5 ; 7 2]';
+steps = 1:1000;
 
-figure();
-for sim_index = 1:size(initial_conditions,2)
-    xi_0 = initial_conditions(:,sim_index);
-    
-    % Array of varying sample times s_k
-    s = NaN(length(steps),1);
-    s(1) = 0;
-    
-    state_history = NaN(length(xi_0), length(steps));
-    state_history(:,1) = xi_0;
-    
-    % Simulate with event-triggered control
-    for k = steps(1:end-1)
-        xi_s_k = state_history(:,k);
-        s(k+1) = trigger(s(k), xi_s_k, sigma,P,Q,h_min);
-        state_history(:,k+1) = state_update(s(k+1), s(k), xi_s_k);
+% for various sigma, we need to count how many timesteps are used on the
+% interval [0,1] seconds.
+t_upperlimit = 1;
+
+% for each value of sigma and each initial condition, we save how many
+% timesteps were needed to stay within the performance bound on the time
+% interval [0,1] seconds
+num_timesteps_computed = NaN(length(sigma_values),size(initial_conditions,2));
+
+colors = [1 0 0 ; 
+          0 1 0 ; 
+          0 0 1 ; 
+          0.5 0.5 0 ; 
+          0.5 0 0.5];
+
+figure(); hold on;
+for sigma_index=1:length(sigma_values)
+
+    sigma = sigma_values(sigma_index)
+    color = colors(sigma_index,:);
+
+
+    for sim_index = 1:size(initial_conditions,2)
+        xi_0 = initial_conditions(:,sim_index);
+        
+        % Array of varying sample times s_k
+        s = NaN(length(steps),1);
+        s(1) = 0;
+        
+        state_history = NaN(length(xi_0), length(steps));
+        state_history(:,1) = xi_0;
+        
+        % Simulate with event-triggered control
+        for k = steps(1:end-1)
+            xi_s_k = state_history(:,k);
+            s_k1 = trigger(s(k), xi_s_k, sigma,P,Q,h_min);
+            if s_k1 > t_upperlimit
+                break
+            else
+                s(k+1) = s_k1;
+                state_history(:,k+1) = state_update(s(k+1), s(k), xi_s_k);
+            end
+        end
+
+        num_timesteps_computed(sigma_index,sim_index) = length(s(~isnan(s)));
+        
+        if sim_index == 1
+            plot(s,vecnorm(state_history,2),'-o', 'Color',color, 'MarkerFaceColor',color, "DisplayName",sprintf("sigma = %g", sigma));
+        else
+            plot(s,vecnorm(state_history,2),'-o', 'Color',color, 'MarkerFaceColor',color, "DisplayName",'');
+        end
+
     end
-    
-    plot(s,vecnorm(state_history,2),'-o'); hold on;
 end
 xlabel("t"); ylabel("|\xi(t)|");
+title("Trajectories for various initial conditions and sigma");
+legend();
+num_timesteps_computed
+hold off;
 
+figure();
+plot(sigma_values,mean(num_timesteps_computed,2),'-o'); xlabel("\sigma"); ylabel("timesteps");
+title("Average number of timesteps in interval [0,1] seconds for various \sigma");
 
 %% HELPER FUNCTIONS
 
@@ -56,7 +98,7 @@ function s = trigger(s_k, xi_s_k,sigma,P,Q, h_min)
     nonlcon = @(t) perf_nonlcon(t, s_k, xi_s_k,sigma,P,Q, h_min);
     
     opts = optimoptions(@fmincon, 'Display','off');
-    s = fmincon(@(t) -t, (s_k+0.00001), [],[],[],[],[],[], nonlcon, opts);
+    s = fmincon(@(t) -t, (s_k+h_min), [],[],[],[],[],[], nonlcon, opts);
 end
 
 % system simulation which uses xi_s_k as the initial state (with s_k the 
