@@ -16,21 +16,29 @@ P = value(P);
 
 
 %% SIMULATION
-xi_0 = [1;1];
 
-steps = 1:20;
+initial_conditions = [1 1 ; 1 4 ; 3 2 ; 2.5 0 ; 0 1.5]';
+steps = 1:12;
 
-s = NaN(length(steps),1);
-s(1) = 0;
-
-state_history = NaN(length(xi_0), length(steps));
-state_history(:,1) = xi_0;
-
-for k = steps(1:end-1)
-    xi_s_k = state_history(:,k);
-    s(k+1) = trigger(s(k), xi_s_k, sigma,P,Q,h_min)
-    state_history(:,k+1) = state_update(s(k+1), s(k), xi_s_k);
+figure();
+for sim_index = 1:size(initial_conditions,2)
+    xi_0 = initial_conditions(:,sim_index);
+    
+    s = NaN(length(steps),1);
+    s(1) = 0;
+    
+    state_history = NaN(length(xi_0), length(steps));
+    state_history(:,1) = xi_0;
+    
+    for k = steps(1:end-1)
+        xi_s_k = state_history(:,k);
+        s(k+1) = trigger(s(k), xi_s_k, sigma,P,Q,h_min)
+        state_history(:,k+1) = state_update(s(k+1), s(k), xi_s_k);
+    end
+    
+    plot(s,vecnorm(state_history,2),'-o'); hold on;
 end
+xlabel("t"); ylabel("|\xi(t)|");
 
 
 %% HELPER FUNCTIONS
