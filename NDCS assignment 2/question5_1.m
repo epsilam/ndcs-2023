@@ -3,9 +3,10 @@ clear all;
 A = [1 -1.5 ; 0 1]; B = [0 ; 1]; K = [-16/3 4];
 A_K = A-B*K;
 
-sigma = 0.5;
+sigma = 0.5;   % performance parameter, see lecture slides
 h_min = 0.001; % minimal sampling interval
 
+%% Solve algebraic Riccati equation
 P = sdpvar(2,2);
 constraints = [P>=0, A_K'*P + P*A_K <= 0];
 options = sdpsettings('verbose',0);
@@ -15,7 +16,7 @@ Q = -value(A_K'*P + P*A_K);
 P = value(P);
 
 
-%% SIMULATION
+%% SIMULATION FOR VARIOUS INITIAL CONDITIONS
 
 initial_conditions = [1 1 ; 1 4 ; 3 2 ; 2.5 0 ; 0 1.5]';
 steps = 1:12;
@@ -24,15 +25,17 @@ figure();
 for sim_index = 1:size(initial_conditions,2)
     xi_0 = initial_conditions(:,sim_index);
     
+    % Array of varying sample times s_k
     s = NaN(length(steps),1);
     s(1) = 0;
     
     state_history = NaN(length(xi_0), length(steps));
     state_history(:,1) = xi_0;
     
+    % Simulate with event-triggered control
     for k = steps(1:end-1)
         xi_s_k = state_history(:,k);
-        s(k+1) = trigger(s(k), xi_s_k, sigma,P,Q,h_min)
+        s(k+1) = trigger(s(k), xi_s_k, sigma,P,Q,h_min);
         state_history(:,k+1) = state_update(s(k+1), s(k), xi_s_k);
     end
     
@@ -51,8 +54,9 @@ xlabel("t"); ylabel("|\xi(t)|");
 function s = trigger(s_k, xi_s_k,sigma,P,Q, h_min)
     % Define nonlinear optimization constraints
     nonlcon = @(t) perf_nonlcon(t, s_k, xi_s_k,sigma,P,Q, h_min);
-
-    s = fmincon(@(t) -t, (s_k+0.00001), [],[],[],[],[],[], nonlcon);
+    
+    opts = optimoptions(@fmincon, 'Display','off');
+    s = fmincon(@(t) -t, (s_k+0.00001), [],[],[],[],[],[], nonlcon, opts);
 end
 
 % system simulation which uses xi_s_k as the initial state (with s_k the 
