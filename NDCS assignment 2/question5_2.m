@@ -1,4 +1,4 @@
-clear all;
+clear all; close all;
 
 A = [1 -1.5 ; 0 1]; B = [0 ; 1]; K = [-16/3 4];
 A_K = A-B*K;
@@ -18,7 +18,7 @@ P = value(P);
 
 %% SIMULATION FOR VARIOUS INITIAL CONDITIONS
 
-sigma_values = [0.01, 0.2, 0.6, 0.9, 0.99];
+sigma_values = [0.0001, 0.001, 0.01, 0.2, 0.6, 0.9, 0.99];
 initial_conditions = [0.2 0.15; 1 2 ; 4 5 ; 7 2]';
 steps = 1:1000;
 
@@ -31,11 +31,15 @@ t_upperlimit = 1;
 % interval [0,1] seconds
 num_timesteps_computed = NaN(length(sigma_values),size(initial_conditions,2));
 
+avg_intersample_times  = NaN(length(sigma_values),size(initial_conditions,2));
+
 colors = [1 0 0 ; 
           0 1 0 ; 
           0 0 1 ; 
           0.5 0.5 0 ; 
-          0.5 0 0.5];
+          0.5 0 0.5 ;
+          0 0.5 0.5 ; 
+          0.5 0.5 0.5];
 
 figure(); hold on;
 for sigma_index=1:length(sigma_values)
@@ -65,21 +69,25 @@ for sigma_index=1:length(sigma_values)
                 state_history(:,k+1) = state_update(s(k+1), s(k), xi_s_k);
             end
         end
-
         num_timesteps_computed(sigma_index,sim_index) = length(s(~isnan(s)));
         
+        % Plot state trajectories
         if sim_index == 1
             plot(s,vecnorm(state_history,2),'-o', 'Color',color, 'MarkerFaceColor',color, "DisplayName",sprintf("sigma = %g", sigma));
         else
             plot(s,vecnorm(state_history,2),'-o', 'Color',color, 'MarkerFaceColor',color, "DisplayName",'');
         end
-
+        
+        s = s(~isnan(s));
+        intersample_times = s(2:end) - s(1:end-1);
+        avg_intersample_times(sigma_index,sim_index) = mean(intersample_times);
     end
 end
 xlabel("t"); ylabel("|\xi(t)|");
 title("Trajectories for various initial conditions and sigma");
 legend();
-num_timesteps_computed
+mean(num_timesteps_computed,2)
+mean(avg_intersample_times,2)
 hold off;
 
 figure();

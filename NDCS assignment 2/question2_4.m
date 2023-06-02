@@ -9,7 +9,7 @@ subplot(2,1,2); scatter(h_values,stability_bools_tozero); ylim([-0.1,1.1]); titl
 
 function stab = is_system_stable_tohold(h,K)
     h
-    A = [1 -1.5 ; 0 1]; B = [0 ; 1];
+    A = [1 -1.5 ; 0 1]; B = [0 ; 1]; 
     A_d = expm(A*h); B_d = (expm(A*h) - eye(2))*(A\B);
     F_0 = [A_d zeros(2,1) ; zeros(1,2) 0]; G_0 = [B_d ; 1];
     F_1 = [A_d B_d ;  zeros(1,2) 1];       G_1 = [zeros(2,1) ; 0];
@@ -29,7 +29,7 @@ end
 
 function stab = is_system_stable_tozero(h,K)
     h
-    A = [1 -1.5 ; 0 1]; B = [0 ; 1];
+    A = [1 -1.5 ; 0 1]; B = [0 ; 1]; 
     A_d = expm(A*h); B_d = (expm(A*h) - eye(2))*(A\B);
     F_0 = [A_d zeros(2,1) ; zeros(1,2) 0]; G_0 = [B_d ; 1];
     F_1 = [A_d zeros(2,1) ; zeros(1,2) 1]; G_1 = [zeros(2,1) ; 0];
