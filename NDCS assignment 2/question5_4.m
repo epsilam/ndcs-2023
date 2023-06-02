@@ -1,12 +1,11 @@
-clear all; close all;
+close all; clear all;
+
+h_avg = 0.4675;
+h_PETC = h_avg/2;
 
 A = [1 -1.5 ; 0 1]; B = [0 ; 1]; K = [-16/3 4];
 A_K = A-B*K;
 
-sigma = 0.01;   % performance parameter, see lecture slides
-h_min = 0.001; % minimal sampling interval
-
-%% Solve algebraic Riccati equation
 P = sdpvar(2,2);
 constraints = [P>=0, A_K'*P + P*A_K <= 0];
 options = sdpsettings('verbose',0);
@@ -15,15 +14,9 @@ optimize(constraints,[],options);
 Q = -value(A_K'*P + P*A_K);
 P = value(P);
 
-
-%% SIMULATION FOR VARIOUS INITIAL CONDITIONS
-
 sigma_values = [0.0001, 0.001, 0.01, 0.2, 0.6, 0.9, 0.99];
 initial_conditions = [0.2 0.15; 1 2 ; 4 5 ; 7 2]';
 steps = 1:1000;
-
-% for various sigma, we need to count how many timesteps are used on the
-% interval [0,1] seconds.
 t_upperlimit = 5;
 
 % for each value of sigma and each initial condition, we save how many
@@ -61,7 +54,7 @@ for sigma_index=1:length(sigma_values)
         % Simulate with event-triggered control
         for k = steps(1:end-1)
             xi_s_k = state_history(:,k);
-            s_k1 = trigger_ETC(s(k), xi_s_k, sigma,P,Q,h_min);
+            s_k1 = trigger_PETC(s(k), xi_s_k, sigma,P,Q,h_PETC);
             if s_k1 > t_upperlimit
                 break
             else
@@ -84,7 +77,7 @@ for sigma_index=1:length(sigma_values)
     end
 end
 xlabel("t"); ylabel("|\xi(t)|");
-title("Trajectories for various initial conditions and sigma");
+title("Trajectories for various initial conditions and sigma with PETC");
 legend();
 mean(num_timesteps_computed,2)
 mean(avg_intersample_times,2)
@@ -94,41 +87,30 @@ figure();
 plot(sigma_values,mean(num_timesteps_computed,2),'-o'); xlabel("\sigma"); ylabel("timesteps");
 title("Average number of timesteps in interval [0,1] seconds for various \sigma");
 
-%% HELPER FUNCTIONS
 
-% refer to my notes and the lecture slides for the notation. this was meant
-% to keep the code as close to the mathematical interpretation as possible.
 
-% trigger function which returns the next time s_{k+1} given s_k such that
-% the performance measure specified by Q and sigma is satisfied.
-function s = trigger_ETC(s_k, xi_s_k,sigma,P,Q, h_min)
-    % Define nonlinear optimization constraints
-    nonlcon = @(t) perf_nonlcon(t, s_k, xi_s_k,sigma,P,Q, h_min);
+
+function s = trigger_PETC(s_k, xi_s_k,sigma,P,Q, h_PETC)
+    % search through multiples of h_PETC
     
-    opts = optimoptions(@fmincon, 'Display','off');
-    s = fmincon(@(t) -t, (s_k+h_min), [],[],[],[],[],[], nonlcon, opts);
+    for r=1:1000
+        t = s_k + r*h_PETC;
+        xi = state_update(t, s_k, xi_s_k);
+        eps = xi_s_k - xi;
+        if performance_measure(xi, eps, sigma, P,Q) < 0
+            break
+        end
+    end
+    s = t;
 end
 
-% system simulation which uses xi_s_k as the initial state (with s_k the 
-% initial time) and simulates for a time length of t-s_k. returns state 
-% at the end.
 function xi_t = state_update(t, s_k, xi_s_k)
     A = [1 -1.5 ; 0 1]; B = [0 ; 1]; K = [-16/3 4];
     M = expm(A*(t-s_k));
     xi_t = (M - (M-eye(2))*(A\B)*K)*xi_s_k;
 end
 
-% performance measure as specified in the lecture slides.
 function phi = performance_measure(xi, epsilon, sigma, P,Q)
     B = [0 ; 1]; K = [-16/3 4];
     phi = [xi' epsilon'] * [(1-sigma)*Q,  P*B*K ; (B*K)'*P, zeros(2,2)] * [xi ; epsilon];
-end
-
-% Convert the performance measure and the minimum sampling interval
-% constraint into constraint inequality functions compatible with fmincon.
-function [c,ceq] = perf_nonlcon(t, s_k, xi_s_k,sigma,P,Q, h_min)
-    xi = @(t) state_update(t,s_k,xi_s_k);
-    eps = @(t) xi_s_k - xi(t);
-    c = [-performance_measure(xi(t),eps(t),sigma,P,Q); s_k-t + h_min];
-    ceq = 0;
 end
