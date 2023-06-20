@@ -9,14 +9,8 @@ errors = nan(max_iter,1);
 step_size = 0.004;
 
 % Initialize dual variables for dual subgradient iteration 
-lambda_init = 1*ones((N-1)*n,1);
-lambda_init = [-10.6424;-4.0134;8.7309; 2.6704; 14.7378; 15.8209; -3.0359; -6.5858; 17.9120; 17.4355; -5.5997;-5.4517];
-lambda_init = [-12.5145    1.0948   10.4644   -0.8572   35.9010   42.5272  -11.7139  -19.8729   38.5687   40.5854  -11.9388  -12.5561]';
-lambda_init = [-9.0624    6.4459    7.9524   -4.7764   44.9703   54.7992  -16.7634  -26.9183   45.7579   50.0472  -14.1451  -15.4598]';
-%lambda_init = [-8.0542    7.8649    7.2122   -5.8195   47.1508   57.7843  -18.0332  -28.6688   47.4167   52.3028  -14.6542  -16.1520]';
+lambda_init = zeros((N-1)*n,1);
 lambda = lambda_init; 
-u_prev = nan(N*m*Tfinal,1); % Initialize variable to store 1 previous iteration
-lambda_prev = nan((N-1)*n,1);
 
 % Keep track of final states
 final_state_history_1 = nan(n,max_iter);
@@ -24,91 +18,96 @@ final_state_history_2 = nan(n,max_iter);
 final_state_history_3 = nan(n,max_iter);
 final_state_history_4 = nan(n,max_iter);
 
-final_state_diffs_history = nan(N-1,max_iter);
-final_state_total_diffs_history = nan(1,max_iter);
+final_state_diffs_history = nan(max_iter,N);
+final_state_total_diffs_history = nan(max_iter,1);
 
 lagrangian_history = nan(max_iter,1);
-%objective_function_history = nan(max_iter,1);
+
+% True final state
+x_f_true = [-4.5006 ; -4.0709 ; -4.7977 ; -4.9120];
+
+% optimal objective function value
+f_optimal = 2252.44178420712;
+
+lb = -umax/Tfinal*ones(m*Tfinal,1);
+ub = umax/Tfinal*ones(m*Tfinal,1);
+options = optimoptions('quadprog','Display','off');
 
 for iter=2:max_iter
     tic;
-    % Solve Lagrangians in distributed fashion for optimal inputs u_i
-    u_1 = sdpvar(m*Tfinal,1);
-    u_2 = sdpvar(m*Tfinal,1);
-    u_3 = sdpvar(m*Tfinal,1);
-    u_4 = sdpvar(m*Tfinal,1);
-    options = sdpsettings('verbose',0,'solver','quadprog');
+    % Solve Lagrangians in distributed fashion for optimal inputs u_i    
+    u_1 = quadprog(2*F_11, F_12 + lambda12(lambda)'*C_1, [],[],[],[],lb,ub,[],options);
+    u_2 = quadprog(2*F_21, F_22 + (lambda23(lambda)-lambda12(lambda))'*C_2, [],[],[],[],lb,ub,[],options);
+    u_3 = quadprog(2*F_31, F_32 + (lambda34(lambda)-lambda23(lambda))'*C_3, [],[],[],[],lb,ub,[],options);
+    u_4 = quadprog(2*F_41, F_42 - lambda34(lambda)'*C_4, [],[],[],[],lb,ub,[],options);
 
-    Obj1 = L_1(u_1,lambda); % Define objective functions for YALMIP to 
-    Obj2 = L_2(u_2,lambda); % minimize, and to save the function value 
-    Obj3 = L_3(u_3,lambda); % after minimization
-    Obj4 = L_4(u_4,lambda);
-
-    optimize(-umax/Tfinal <= u_1 <= umax/Tfinal, Obj1, options);
-    optimize(-umax/Tfinal <= u_2 <= umax/Tfinal, Obj2, options);
-    optimize(-umax/Tfinal <= u_3 <= umax/Tfinal, Obj3, options);
-    optimize(-umax/Tfinal <= u_4 <= umax/Tfinal, Obj4, options);
-    
-    u = [value(u_1) ; value(u_2) ; value(u_3) ; value(u_4)];
+    u = [u_1 ; u_2 ; u_3 ; u_4];
 
     % Add newly computed quantities to history trackers
-    %lagrangian_history(iter) = L(u,lambda);
-    lagrangian_history(iter) = value(Obj1)+value(Obj2)+value(Obj3)+value(Obj4);
+    lagrangian_history(iter) = L(u,lambda);
     subgradient = h(u);
 
-    % Add final states to history
-    %final_state_history_1(:,iter) = x_1f(u1(u));
-    %final_state_history_2(:,iter) = x_2f(u2(u));
-    %final_state_history_3(:,iter) = x_3f(u3(u));
-    %final_state_history_4(:,iter) = x_4f(u4(u));
-
     % Add distances between final states to history
-    final_state_diffs = subgradient;
-    final_state_diffs_history(1,iter) = norm(final_state_diffs(0*n+1:1*n));
-    final_state_diffs_history(2,iter) = norm(final_state_diffs(1*n+1:2*n));
-    final_state_diffs_history(3,iter) = norm(final_state_diffs(2*n+1:3*n));
+    final_state_diffs_history(iter,:) = [norm(x_f_true - x_1f(u1(u))), ...
+                                         norm(x_f_true - x_2f(u2(u))), ...
+                                         norm(x_f_true - x_3f(u3(u))), ...
+                                         norm(x_f_true - x_4f(u4(u)))];
 
     % Update variable step size
-    %if ~isnan(u_prev)
+    %if true
         %step_size = 0.1/norm(h(u));
-        %step_size = 0.1/(1+iter);
+        %step_size = 1/(5+iter);
     %end
 
     % Update dual variables
     lambda = lambda + step_size*subgradient; 
 
-    sum_diffs = sum(final_state_diffs_history(:,iter));
+    % Define print quantities
+    error = f_optimal - lagrangian_history(iter);
+    %sum_diffs = sum(final_state_diffs_history(iter,:));
+    
 
     % Print messages
     fprintf("Iteration %d,  ", iter);
-    fprintf("L - L_prev = %g,  ", lagrangian_history(iter)-lagrangian_history(iter-1));
-    fprintf("L = %g,   ", lagrangian_history(iter));
-    fprintf("Total x_f differences = %g\n", sum_diffs);
+    fprintf("f* - L = %g,   ", error);
+    %fprintf("Total x_f differences = %g\n", sum_diffs);
 
     toc;
 
     % Convergence condition
-    if sum_diffs < 0.5
+    if error < 1e-3
         break
     end
 end
 
 %% PLOTTING
+close all;
+
 figure(); 
-subplot(2,1,1); hold on;
+subplot(3,1,1); 
+plot(1:max_iter, lagrangian_history);
+grid on;
 title("Dual function at each iteration of subgradient iteration");
-semilogy(1:max_iter, lagrangian_history);
 xlabel("iteration"); ylabel("Dual function value");
 xlim([1, iter]);
 
-subplot(2,1,2); hold on;
-title("Norms of differences between final states during optimization");
-semilogy(1:max_iter, final_state_diffs_history(1,:));
-semilogy(1:max_iter, final_state_diffs_history(2,:));
-semilogy(1:max_iter, final_state_diffs_history(3,:));
-legend("x_{1f} - x_{2f}", "x_{2f} - x_{3f}", "x_{3f} - x_{4f}");
+subplot(3,1,2); 
+semilogy(1:max_iter, f_optimal - lagrangian_history);
+title("Error sequence (diff. between optimal objective value and dual)");
+grid on;
+xlabel("iteration"); ylabel("Dual objective error");
+legend("f^* - d(\lambda)");
+xlim([1, iter]); 
+
+subplot(3,1,3); hold on; grid on;
+title("Distance betwen true optimized final state and individual agent final state");
+plot(1:max_iter, final_state_diffs_history(:,1));
+plot(1:max_iter, final_state_diffs_history(:,2));
+plot(1:max_iter, final_state_diffs_history(:,3));
+plot(1:max_iter, final_state_diffs_history(:,4));
+legend("|x_{f} - x_{1f}|", "|x_{f} - x_{2f}|", "|x_{f} - x_{3f}|", "|x_{f} - x_{4f}|");
 xlabel("iteration"); ylabel("norm");
-xlim([1, iter]);
+xlim([1, iter]); ylim([0, 20]);
 
 plot_system_trajectories(u);
 

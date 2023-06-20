@@ -19,10 +19,16 @@ lambda34 = @(lambda) lambda(2*n+1 : 3*n);
 
 %% Define minimization objective, constraint functions, and duals
 % Precompute for f (minimization objective function)
-[F_11, F_12, F_13] = f_matrices(1); f_1 = @(u_1) u_1'*F_11*u_1 + F_12*u_1 + F_13;
-[F_21, F_22, F_23] = f_matrices(2); f_2 = @(u_2) u_2'*F_21*u_2 + F_22*u_2 + F_23;
-[F_31, F_32, F_33] = f_matrices(3); f_3 = @(u_3) u_3'*F_31*u_3 + F_32*u_3 + F_33;
-[F_41, F_42, F_43] = f_matrices(4); f_4 = @(u_4) u_4'*F_41*u_4 + F_42*u_4 + F_43;
+[F_11, F_12, F_13] = f_matrices(1); 
+[F_21, F_22, F_23] = f_matrices(2); 
+[F_31, F_32, F_33] = f_matrices(3); 
+[F_41, F_42, F_43] = f_matrices(4); 
+
+f_1 = @(u_1) u_1'*F_11*u_1 + F_12*u_1 + F_13;
+f_2 = @(u_2) u_2'*F_21*u_2 + F_22*u_2 + F_23;
+f_3 = @(u_3) u_3'*F_31*u_3 + F_32*u_3 + F_33;
+f_4 = @(u_4) u_4'*F_41*u_4 + F_42*u_4 + F_43;
+
 f = @(u) f_1(u1(u)) + f_2(u2(u)) + f_3(u3(u)) + f_4(u4(u));
 
 % Precompute for h (equality constraint function)
@@ -39,10 +45,15 @@ h = @(u) A_h * u + b_h;
 g = @(u) [g_i(u1(u)) ; g_i(u2(u)) ; g_i(u3(u)) ; g_i(u4(u))];
 
 % Define final state functions
-x_1f = @(u_1) A1^Tfinal*x01 + C(1,Tfinal)*u_1;
-x_2f = @(u_2) A2^Tfinal*x02 + C(2,Tfinal)*u_2;
-x_3f = @(u_3) A3^Tfinal*x03 + C(3,Tfinal)*u_3;
-x_4f = @(u_4) A4^Tfinal*x04 + C(4,Tfinal)*u_4;
+C_1 = C(1,Tfinal);
+C_2 = C(2,Tfinal);
+C_3 = C(3,Tfinal);
+C_4 = C(4,Tfinal);
+
+x_1f = @(u_1) A1^Tfinal*x01 + C_1*u_1;
+x_2f = @(u_2) A2^Tfinal*x02 + C_2*u_2;
+x_3f = @(u_3) A3^Tfinal*x03 + C_3*u_3;
+x_4f = @(u_4) A4^Tfinal*x04 + C_4*u_4;
 
 % Define distributed Lagrangians
 L_1 = @(u_1,lambda) f_1(u_1)                      + lambda12(lambda)'*x_1f(u_1);

@@ -8,6 +8,7 @@ Constraints = [h(u) == 0, g(u) <= 0];
 Objective = [f(u)];
 options = sdpsettings('verbose',0,'solver','quadprog');
 optimize(Constraints,Objective,options)
+u = value(u);
 
 %% PLOTTING
 plot_system_trajectories(u);
