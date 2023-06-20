@@ -2,7 +2,7 @@
 clear all; close all;
 question1_a_function_definitions;
 
-%% EXERCISE SOLUTION: DECENTRALIZED PROJECTED SUBGRADIENT METHOD
+%% EXERCISE SOLUTION: CENTRALIZED PROJECTED SUBGRADIENT METHOD
 u = sdpvar(N*m*Tfinal,1);
 Constraints = [h(u) == 0, g(u) <= 0];
 Objective = [f(u)];
