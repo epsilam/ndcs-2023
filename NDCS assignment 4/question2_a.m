@@ -2,19 +2,19 @@
 clear all; close all;
 question1_a_function_definitions;
 
-%% EXERCISE SOLUTION: DECENTRALIZED PROJECTED SUBGRADIENT METHOD
+%% EXERCISE SOLUTION: ADMM
 % Iteration parameters
-max_iter = 50000;
-errors = nan(max_iter,1);
-step_size = 0.004;
-error_tolerance = 1e-2;
+max_iter = 5000;
+
+rho_list = [0.01,0.02,0.05,0.1,0.2,0.5,1,5];
+
+errors = nan(max_iter,length(rho_list));
+error_tolerance = 1e-3;
+
 
 % Initialize dual variables for dual subgradient iteration 
 lambda_init = zeros((N-1)*n,1);
 lambda = lambda_init; 
-
-% Keep track of final states
-lagrangian_history = nan(max_iter,1);
 
 % True final state
 x_f_true = [-4.50061264946867 ;
@@ -22,66 +22,86 @@ x_f_true = [-4.50061264946867 ;
             -4.79767912346124 ;
             -4.91202943845703 ];
 
-% optimal objective function value
-f_optimal = 2252.44178420712;
 
 lb = -umax/Tfinal*ones(m*Tfinal,1);
 ub = umax/Tfinal*ones(m*Tfinal,1);
 options = optimoptions('quadprog','Display','off');
 
+
+for rho_index = 1:length(rho_list)
+    rho = rho_list(rho_index);
+    % Precompute quantities
+    H_11 = 2*F_11 + rho*(C_1'*C_1);
+    H_21 = 2*F_21 + rho*(C_2'*C_2);
+    H_31 = 2*F_31 + rho*(C_3'*C_3);
+    H_41 = 2*F_41 + rho*(C_4'*C_4);
+    
+    % Initialize dual variables
+    lambda_1 = zeros(n,1);
+    lambda_2 = zeros(n,1);
+    lambda_3 = zeros(n,1);
+    lambda_4 = zeros(n,1);
+    
+    % Initialize ADMM estimate of final state 
+    x_f = zeros(n,1);
 for iter=2:max_iter
-    % Solve Lagrangians in distributed fashion for optimal inputs u_i    
-    u_1 = quadprog(2*F_11, F_12 + lambda12(lambda)'*C_1, [],[],[],[],lb,ub,[],options);
-    u_2 = quadprog(2*F_21, F_22 + (lambda23(lambda)-lambda12(lambda))'*C_2, [],[],[],[],lb,ub,[],options);
-    u_3 = quadprog(2*F_31, F_32 + (lambda34(lambda)-lambda23(lambda))'*C_3, [],[],[],[],lb,ub,[],options);
-    u_4 = quadprog(2*F_41, F_42 - lambda34(lambda)'*C_4, [],[],[],[],lb,ub,[],options);
+    % Minimize augmented Lagrangians
+    H_12 = F_12 + (lambda_1 + rho*(v_1 - x_f))'*C_1;
+    H_22 = F_22 + (lambda_2 + rho*(v_2 - x_f))'*C_2;
+    H_32 = F_32 + (lambda_3 + rho*(v_3 - x_f))'*C_3;
+    H_42 = F_42 + (lambda_4 + rho*(v_4 - x_f))'*C_4;
+    u_1 = quadprog(H_11, H_12, [],[],[],[],lb,ub,[],options);
+    u_2 = quadprog(H_21, H_22, [],[],[],[],lb,ub,[],options);
+    u_3 = quadprog(H_31, H_32, [],[],[],[],lb,ub,[],options);
+    u_4 = quadprog(H_41, H_42, [],[],[],[],lb,ub,[],options);
 
     u = [u_1 ; u_2 ; u_3 ; u_4];
 
-    % Add newly computed quantities to history trackers
-    lagrangian_history(iter) = L(u,lambda);
-    subgradient = h(u);
+    x_f = 1/4 * sum([C_1*u_1 + v_1 + lambda_1/rho, ... 
+                     C_2*u_2 + v_2 + lambda_2/rho, ...
+                     C_3*u_3 + v_3 + lambda_3/rho, ...
+                     C_4*u_4 + v_4 + lambda_4/rho], 2);
 
-    % Update dual variables
-    lambda = lambda + step_size*subgradient; 
+    lambda_1 = lambda_1 + rho*(C_1*u_1 + v_1 - x_f);
+    lambda_2 = lambda_2 + rho*(C_2*u_2 + v_2 - x_f);
+    lambda_3 = lambda_3 + rho*(C_3*u_3 + v_3 - x_f);
+    lambda_4 = lambda_4 + rho*(C_4*u_4 + v_4 - x_f);
+
 
     % Add error to history
-    errors(iter) = max([norm(x_f_true - x_1f(u1(u))), ...
-                        norm(x_f_true - x_2f(u2(u))), ...
-                        norm(x_f_true - x_3f(u3(u))), ...
-                        norm(x_f_true - x_4f(u4(u)))]);
+    errors(iter,rho_index) = norm(x_f - x_f_true);
 
     % Print messages
-    fprintf("Iteration %6d,  ", iter);
-    fprintf("error = %2.8f\n", errors(iter));
-
+    fprintf("Iteration %d,  ", iter);
+    fprintf("error = %g\n", errors(iter,rho_index));
     % Convergence condition
-    if abs(errors(iter)) < error_tolerance
+    if abs(errors(iter,rho_index)) < error_tolerance
         break
     end
+end
 end
 
 %% PLOTTING
 close all;
 
+figure();
+for rho_index = 1:length(rho_list)
+    semilogy(1:max_iter, errors(:,rho_index)); hold on;
+end
+
+title("Error sequences");
+grid on;
+xlabel("iteration"); ylabel("error");
+legend("\rho = "+rho_list);
+ylim([1e-3, 1e1]);
+xlim([1, 2000]); 
+
+
+
+
+
+
 plot_system_trajectories(u);
-
-figure(); 
-subplot(2,1,1); 
-plot(1:max_iter, lagrangian_history);
-grid on;
-title("Dual function at each iteration of subgradient iteration");
-xlabel("k"); ylabel("Dual function value at iteration k");
-xlim([1, iter]);
-ax = gca; ax.XAxis.Exponent = 0;
-
-subplot(2,1,2); 
-semilogy(1:max_iter, errors);
-title("Error sequence");
-grid on;
-xlabel("k"); ylabel("e^k");
-xlim([1, iter]); 
-ax = gca; ax.XAxis.Exponent = 0;
 
 
 % Auxillary plotting functions

@@ -50,10 +50,15 @@ C_2 = C(2,Tfinal);
 C_3 = C(3,Tfinal);
 C_4 = C(4,Tfinal);
 
-x_1f = @(u_1) A1^Tfinal*x01 + C_1*u_1;
-x_2f = @(u_2) A2^Tfinal*x02 + C_2*u_2;
-x_3f = @(u_3) A3^Tfinal*x03 + C_3*u_3;
-x_4f = @(u_4) A4^Tfinal*x04 + C_4*u_4;
+v_1 = A1^Tfinal*x01;
+v_2 = A2^Tfinal*x02;
+v_3 = A3^Tfinal*x03;
+v_4 = A4^Tfinal*x04;
+
+x_1f = @(u_1) v_1 + C_1*u_1;
+x_2f = @(u_2) v_2 + C_2*u_2;
+x_3f = @(u_3) v_3 + C_3*u_3;
+x_4f = @(u_4) v_4 + C_4*u_4;
 
 % Define distributed Lagrangians
 L_1 = @(u_1,lambda) f_1(u_1)                      + lambda12(lambda)'*x_1f(u_1);

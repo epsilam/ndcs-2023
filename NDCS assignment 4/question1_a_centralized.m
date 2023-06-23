@@ -3,12 +3,16 @@ clear all; close all;
 question1_a_function_definitions;
 
 %% EXERCISE SOLUTION: CENTRALIZED PROJECTED SUBGRADIENT METHOD
+% Note: this requires YALMIP to run
 u = sdpvar(N*m*Tfinal,1);
 Constraints = [h(u) == 0, g(u) <= 0];
 Objective = [f(u)];
 options = sdpsettings('verbose',0,'solver','quadprog');
 optimize(Constraints,Objective,options)
 u = value(u);
+
+format longG;
+x_f_true = mean([x_1f(u1(u)), x_2f(u2(u)), x_3f(u3(u)), x_4f(u4(u))],2);
 
 %% PLOTTING
 plot_system_trajectories(u);
